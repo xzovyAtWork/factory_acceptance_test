@@ -1,166 +1,241 @@
--- 007_seed.sql : Initial seed data for HVAC Inspection System
+// src/db/seed.js
+require('dotenv').config();
+const db = require('../config/db');
+const bcrypt = require('bcrypt');
 
-------------------------------------------------------------
--- USERS
-------------------------------------------------------------
+async function seed() {
+  console.log('🌱 Starting seed...');
 
-INSERT INTO users (email, password_hash, full_name, role)
-VALUES
-  ('admin@example.com',
-   '$2b$10$GhQLG2tHP6KbkSNguhDf/.YF8Y7AirBLps4/gSwclItHp3PtuP0Ze', 
-   'System Administrator',
-   'admin'),
+  const client = await db.pool.connect();
 
-  ('tech1@example.com',
-   '$2b$10$GhQLG2tHP6KbkSNguhDf/.YF8Y7AirBLps4/gSwclItHp3PtuP0Ze',
-   'Technician One',
-   'technician'),
+  try {
+    await client.query('BEGIN');
 
-  ('tech2@example.com',
-   '$2b$10$GhQLG2tHP6KbkSNguhDf/.YF8Y7AirBLps4/gSwclItHp3PtuP0Ze',
-   'Technician Two',
-   'technician');
+    // ------------------------------------------------------------
+    // USERS
+    // ------------------------------------------------------------
+    const adminPass = await bcrypt.hash('Admin123!', 10);
+    const tech1Pass = await bcrypt.hash('Tech123!', 10);
+    const tech2Pass = await bcrypt.hash('Tech456!', 10);
 
--- NOTE:
--- Replace password_hash values with real bcrypt hashes.
--- Example bcrypt hash for "password123":
--- $2b$10$u1k9xN8YgZrQm8xVwF8qUu6qQ1uFZ8u3lJxJxJxJxJxJxJxJxJx
+    const admin = await client.query(
+      `INSERT INTO users (email, password_hash, full_name, role)
+       VALUES ($1,$2,$3,$4)
+       ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
+       RETURNING id`,
+      ['admin@example.com', adminPass, 'System Administrator', 'admin']
+    );
 
+    const tech1 = await client.query(
+      `INSERT INTO users (email, password_hash, full_name, role)
+       VALUES ($1,$2,$3,$4)
+       ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
+       RETURNING id`,
+      ['tech1@example.com', tech1Pass, 'Technician One', 'technician']
+    );
 
-------------------------------------------------------------
--- UNIT DESIGNATIONS
-------------------------------------------------------------
+    const tech2 = await client.query(
+      `INSERT INTO users (email, password_hash, full_name, role)
+       VALUES ($1,$2,$3,$4)
+       ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
+       RETURNING id`,
+      ['tech2@example.com', tech2Pass, 'Technician Two', 'technician']
+    );
 
-INSERT INTO unit_designations (code, label)
-VALUES
-  ('L', 'Left'),
-  ('R', 'Right'),
-  ('T', 'Top'),
-  ('B', 'Bottom'),
-  ('A', 'Designation A'),
-  ('B2', 'Designation B'),
-  ('C', 'Designation C')
-ON CONFLICT DO NOTHING;
+    const adminId = admin.rows[0].id;
+    const tech1Id = tech1.rows[0].id;
 
+    console.log('✔ Users seeded');
 
-------------------------------------------------------------
--- SAMPLE WIKI PAGE
-------------------------------------------------------------
+    // ------------------------------------------------------------
+    // UNIT DESIGNATIONS
+    // ------------------------------------------------------------
+    const designations = ['L', 'R', 'T', 'B', 'A', 'B2', 'C'];
 
-INSERT INTO wiki_pages (title, slug, content, created_by)
-VALUES
-  ('Evaporator Coil Cleaning',
-   'evaporator-coil-cleaning',
-   '<h2>Evaporator Coil Cleaning</h2><p>Ensure coil is free of debris and buildup.</p>',
-   1);
+    for (const code of designations) {
+      await client.query(
+        `INSERT INTO unit_designations (code, label)
+         VALUES ($1, $2)
+         ON CONFLICT (code) DO NOTHING`,
+        [code, `Designation ${code}`]
+      );
+    }
 
+    console.log('✔ Unit designations seeded');
 
-------------------------------------------------------------
--- SAMPLE TEMPLATE
-------------------------------------------------------------
+    // ------------------------------------------------------------
+    // WIKI PAGE
+    // ------------------------------------------------------------
+    const wiki = await client.query(
+      `INSERT INTO wiki_pages (title, slug, content, created_by)
+       VALUES ($1,$2,$3,$4)
+       ON CONFLICT (slug) DO UPDATE SET slug = EXCLUDED.slug
+       RETURNING id`,
+      [
+        'Evaporator Coil Cleaning',
+        'evaporator-coil-cleaning',
+        '<h2>Evaporator Coil Cleaning</h2><p>Ensure coil is free of debris.</p>',
+        adminId
+      ]
+    );
 
-INSERT INTO templates
-  (name, unit_style, supported_test_types, allowed_designations, created_by)
-VALUES
-  ('Standard RTU Template',
-   'RTU-STD',
-   '{"bypass","full_water"}',
-   '{"L","R","A","B2"}',
-   1)
-RETURNING id INTO TEMP TABLE new_template;
+    const wikiId = wiki.rows[0].id;
+    console.log('✔ Wiki page seeded');
 
--- Retrieve template ID
-WITH tpl AS (SELECT id FROM new_template)
-INSERT INTO template_sections (template_id, name, sort_order)
-VALUES
-  ((SELECT id FROM tpl), 'Evaporator Section', 1),
-  ((SELECT id FROM tpl), 'Motor Section', 2);
+    // ------------------------------------------------------------
+    // TEMPLATE
+    // ------------------------------------------------------------
+    const template = await client.query(
+      `INSERT INTO templates
+        (name, unit_style, supported_test_types, allowed_designations, created_by)
+       VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+       RETURNING id`,
+      [
+        'Standard RTU Template',
+        'RTU-STD',
+        ['bypass', 'full_water'],
+        ['L', 'R', 'A', 'B2'],
+        adminId
+      ]
+    );
 
--- Retrieve section IDs
-WITH sec AS (
-  SELECT id, name FROM template_sections
-  WHERE template_id = (SELECT id FROM new_template)
-)
-INSERT INTO template_test_points
-  (template_section_id, test_type, description, wiki_page_id, sort_order)
-VALUES
-  ((SELECT id FROM sec WHERE name='Evaporator Section'),
-    'bypass', 'Check evaporator coil cleanliness', 1, 1),
+    const templateId = template.rows[0].id;
+    console.log('✔ Template seeded');
 
-  ((SELECT id FROM sec WHERE name='Evaporator Section'),
-    'full_water', 'Verify water distribution across coil', 1, 2),
+    // ------------------------------------------------------------
+    // TEMPLATE SECTIONS
+    // ------------------------------------------------------------
+    const evapSec = await client.query(
+      `INSERT INTO template_sections (template_id, name, sort_order)
+       VALUES ($1,$2,$3)
+       ON CONFLICT DO NOTHING
+       RETURNING id`,
+      [templateId, 'Evaporator Section', 1]
+    );
 
-  ((SELECT id FROM sec WHERE name='Motor Section'),
-    'bypass', 'Check motor amperage', NULL, 1),
+    const motorSec = await client.query(
+      `INSERT INTO template_sections (template_id, name, sort_order)
+       VALUES ($1,$2,$3)
+       ON CONFLICT DO NOTHING
+       RETURNING id`,
+      [templateId, 'Motor Section', 2]
+    );
 
-  ((SELECT id FROM sec WHERE name='Motor Section'),
-    'full_water', 'Verify motor vibration levels', NULL, 2);
+    const evapSecId = evapSec.rows[0]?.id;
+    const motorSecId = motorSec.rows[0]?.id;
 
+    console.log('✔ Template sections seeded');
 
-------------------------------------------------------------
--- SAMPLE UNIT
-------------------------------------------------------------
+    // ------------------------------------------------------------
+    // TEMPLATE TEST POINTS
+    // ------------------------------------------------------------
+    await client.query(
+      `INSERT INTO template_test_points
+        (template_section_id, test_type, description, wiki_page_id, sort_order)
+       VALUES
+        ($1,'bypass','Check evaporator coil cleanliness',$3,1),
+        ($1,'full_water','Verify water distribution across coil',$3,2),
+        ($2,'bypass','Check motor amperage',NULL,1),
+        ($2,'full_water','Verify motor vibration levels',NULL,2)
+       ON CONFLICT DO NOTHING`,
+      [evapSecId, motorSecId, wikiId]
+    );
 
-INSERT INTO units (unit_number, job_number)
-VALUES ('CU-1001', 'JOB-5001')
-RETURNING id INTO TEMP TABLE new_unit;
+    console.log('✔ Template test points seeded');
 
+    // ------------------------------------------------------------
+    // UNIT
+    // ------------------------------------------------------------
+    const unit = await client.query(
+      `INSERT INTO units (unit_number, job_number)
+       VALUES ($1,$2)
+       ON CONFLICT (unit_number, job_number) DO UPDATE SET unit_number = EXCLUDED.unit_number
+       RETURNING id`,
+      ['CU-1001', 'JOB-5001']
+    );
 
-------------------------------------------------------------
--- SAMPLE INSPECTION FORM
-------------------------------------------------------------
+    const unitId = unit.rows[0].id;
+    console.log('✔ Unit seeded');
 
--- Create form
-INSERT INTO inspection_forms
-  (template_id, unit_id, unit_number, job_number, unit_designation, test_type, created_by)
-VALUES
-  ((SELECT id FROM new_template),
-   (SELECT id FROM new_unit),
-   'CU-1001',
-   'JOB-5001',
-   'L',
-   'bypass',
-   2)
-RETURNING id INTO TEMP TABLE new_form;
+    // ------------------------------------------------------------
+    // INSPECTION FORM
+    // ------------------------------------------------------------
+    const form = await client.query(
+      `INSERT INTO inspection_forms
+        (template_id, unit_id, unit_number, job_number, unit_designation, test_type, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
+       ON CONFLICT DO NOTHING
+       RETURNING id`,
+      [
+        templateId,
+        unitId,
+        'CU-1001',
+        'JOB-5001',
+        'L',
+        'bypass',
+        tech1Id
+      ]
+    );
 
--- Create form sections
-WITH tpl_sec AS (
-  SELECT * FROM template_sections
-  WHERE template_id = (SELECT id FROM new_template)
-)
-INSERT INTO inspection_form_sections
-  (inspection_form_id, template_section_id, name, sort_order)
-SELECT
-  (SELECT id FROM new_form),
-  tpl_sec.id,
-  tpl_sec.name,
-  tpl_sec.sort_order
-FROM tpl_sec;
+    const formId = form.rows[0]?.id;
 
--- Create form test points
-WITH form_sec AS (
-  SELECT * FROM inspection_form_sections
-  WHERE inspection_form_id = (SELECT id FROM new_form)
-),
-tpl_points AS (
-  SELECT * FROM template_test_points
-  WHERE test_type = 'bypass'
-)
-INSERT INTO inspection_form_test_points
-  (inspection_form_section_id, template_test_point_id, description, wiki_page_id)
-SELECT
-  form_sec.id,
-  tpl_points.id,
-  tpl_points.description,
-  tpl_points.wiki_page_id
-FROM form_sec
-JOIN tpl_points ON tpl_points.template_section_id = form_sec.template_section_id;
+    if (formId) {
+      console.log('✔ Inspection form seeded');
 
+      // ------------------------------------------------------------
+      // FORM SECTIONS
+      // ------------------------------------------------------------
+      const formSections = await client.query(
+        `INSERT INTO inspection_form_sections
+          (inspection_form_id, template_section_id, name, sort_order)
+         SELECT $1, id, name, sort_order
+         FROM template_sections
+         WHERE template_id = $2
+         RETURNING id, template_section_id`,
+        [formId, templateId]
+      );
 
-------------------------------------------------------------
--- SIGN-ON SAMPLE
-------------------------------------------------------------
+      // ------------------------------------------------------------
+      // FORM TEST POINTS
+      // ------------------------------------------------------------
+      for (const sec of formSections.rows) {
+        await client.query(
+          `INSERT INTO inspection_form_test_points
+            (inspection_form_section_id, template_test_point_id, description, wiki_page_id)
+           SELECT $1, id, description, wiki_page_id
+           FROM template_test_points
+           WHERE template_section_id = $2 AND test_type = 'bypass'
+           ON CONFLICT DO NOTHING`,
+          [sec.id, sec.template_section_id]
+        );
+      }
 
-INSERT INTO technician_signons (inspection_form_id, user_id, role_at_time)
-VALUES
-  ((SELECT id FROM new_form), 2, 'technician');
+      console.log('✔ Form sections + test points seeded');
+
+      // ------------------------------------------------------------
+      // SIGN-ON
+      // ------------------------------------------------------------
+      await client.query(
+        `INSERT INTO technician_signons
+          (inspection_form_id, user_id, role_at_time)
+         VALUES ($1,$2,'technician')
+         ON CONFLICT DO NOTHING`,
+        [formId, tech1Id]
+      );
+
+      console.log('✔ Technician sign-on seeded');
+    }
+
+    await client.query('COMMIT');
+    console.log('🎉 Seed complete!');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('❌ Seed failed:', err);
+  } finally {
+    client.release();
+    process.exit(0);
+  }
+}
+
+seed();

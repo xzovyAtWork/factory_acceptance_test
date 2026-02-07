@@ -5,7 +5,7 @@ export function useApiClient() {
   const { token } = useAuth();
 
   const instance = axios.create({
-    baseURL: import.meta.env.VITE_API_URL ||'/api'
+    baseURL: '/api'
   });
 
   instance.interceptors.request.use((config) => {

@@ -16,7 +16,7 @@ const app = express();
 app.use(express.json());
 app.use(cors({
     origin: [
-      "http://localhost:5173",
+      "http://localhost:4173",
       "https://factory-acceptance-test-1.onrender.com"
     ],
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],

@@ -5,16 +5,6 @@ const errorHandler = require('./middleware/errorHandler');
 
 const cors = require("cors");
 
-app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "https://factory-acceptance-test-1.onrender.com"
-  ],
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true
-}));
-
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const templateRoutes = require('./routes/templateRoutes');
@@ -24,6 +14,15 @@ const pdfRoutes = require('./routes/pdfRoutes');
 
 const app = express();
 app.use(express.json());
+app.use(cors({
+    origin: [
+      "http://localhost:5173",
+      "https://factory-acceptance-test-1.onrender.com"
+    ],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true
+  }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', auth(true), userRoutes);

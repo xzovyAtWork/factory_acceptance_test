@@ -3,6 +3,7 @@ const db = require('../config/db');
 const jwt = require('jsonwebtoken');
 const { secret, expiresIn } = require('../config/jwt');
 const { comparePassword } = require('../utils/password');
+const { hash } = require('bcrypt');
 
 exports.login = async (req, res, next) => {
   try {
@@ -12,10 +13,12 @@ exports.login = async (req, res, next) => {
       [email]
     );
     const user = rows[0];
+    console.log("Comparing:", password, "with hash:", user.password_hash);
     if (!user || !user.is_active) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     const ok = await comparePassword(password, user.password_hash);
+    console.log(user.password_hash, rows[0])
     if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
 
     const token = jwt.sign(

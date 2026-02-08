@@ -15,6 +15,7 @@ module.exports = function auth(required = true) {
     try {
       const payload = jwt.verify(token, secret);
       // payload: { userId, role, exp }
+      console.log(payload.userId)
       req.user = { id: payload.userId, role: payload.role };
       next();
     } catch (err) {

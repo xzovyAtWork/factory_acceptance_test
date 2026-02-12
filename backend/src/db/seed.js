@@ -17,6 +17,11 @@ async function seed() {
     const tech1Pass = await hashPassword('Tech123!');
     const tech2Pass = await hashPassword('Tech456!');
 
+    const clearDb = await client.query(
+      `TRUNCATE TABLE users CASCADE;
+      `
+    )
+
     const admin = await client.query(
       `INSERT INTO users (email, password_hash, full_name, role)
        VALUES ($1,$2,$3,$4)

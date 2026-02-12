@@ -14,9 +14,9 @@ exports.login = async (req, res, next) => {
     );
     const user = rows[0];
     console.log("Comparing:", password, "with hash:", user.password_hash);
-    if (!user || !user.is_active) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
+    // if (!user || !user.is_active) {
+    //   return res.status(401).json({ error: 'Invalid credentials' });
+    // }
     const ok = await comparePassword(password, user.password_hash);
     console.log(user.password_hash, rows[0])
     if (!ok) return res.status(401).json({ error: 'Invalid credentials' });

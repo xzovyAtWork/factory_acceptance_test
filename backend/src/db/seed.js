@@ -19,7 +19,6 @@ async function seed() {
 
     const clearDb = await client.query(
       `TRUNCATE TABLE users CASCADE;
-      DROP TABLE users;
       `
     )
     console.log("DB cleared")

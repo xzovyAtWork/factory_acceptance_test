@@ -19,8 +19,10 @@ async function seed() {
 
     const clearDb = await client.query(
       `TRUNCATE TABLE users CASCADE;
+      DROP TABLE users;
       `
     )
+    console.log("DB cleared")
 
     const admin = await client.query(
       `INSERT INTO users (email, password_hash, full_name, role)
